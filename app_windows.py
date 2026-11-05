@@ -33,17 +33,11 @@ def cartella_programma():
 
 
 def cartella_dati_predefinita():
-    """Dati_VestizioneDCT accanto alla cartella del programma.
-    App:       <SD>\\Vestizione_DCT_App\\VestizioneDCT.exe          -> <SD>\\Dati_VestizioneDCT
-    Portatile: <SD>\\Vestizione_DCT_Portatile\\programma\\app_windows.py -> <SD>\\Dati_VestizioneDCT
-    Si risale finche' si trova una Dati_VestizioneDCT gia' esistente (al massimo 3 livelli);
-    se non c'e', la si crea accanto alla cartella del programma."""
+    """Dati_VestizioneDCT nella cartella che contiene le cartelle del programma (la "radice"):
+    App:       <radice>\\Vestizione_DCT_App\\VestizioneDCT.exe               -> <radice>\\Dati_VestizioneDCT
+    Portatile: <radice>\\Vestizione_DCT_Portatile\\programma\\app_windows.py -> <radice>\\Dati_VestizioneDCT
+    La radice puo' essere la scheda SD o una qualsiasi cartella: i dati seguono il programma."""
     qui = cartella_programma()
-    d = qui
-    for _ in range(3):
-        if os.path.isdir(os.path.join(d, NOME_DATI)):
-            return os.path.join(d, NOME_DATI)
-        d = os.path.dirname(d)
     radice = os.path.dirname(qui)
     if os.path.basename(qui).lower() == "programma":          # versione portatile: programma\ dentro Vestizione_DCT_Portatile\
         radice = os.path.dirname(radice)

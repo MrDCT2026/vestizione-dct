@@ -13,7 +13,10 @@ COSA C'E' SULLA SCHEDA
 PRIMA DI COPIARE SULLA SCHEDA
   Lo zip scaricato da internet viene "marcato" da Windows. Prima di estrarlo:
   clic destro sullo zip > Proprieta' > in basso spunta "Sblocca" > OK.
-  Poi estrai tutto e copia il contenuto nella radice della scheda SD.
+  Poi estrai tutto. La cartella puo' stare dove si vuole (radice della scheda, una sottocartella,
+  anche il disco del PC) e si puo' rinominare: basta tenere INSIEME le cartelle qui sopra.
+  I dati stanno sempre in Dati_VestizioneDCT accanto alle due versioni: spostando la cartella
+  intera, i dati la seguono.
 
 PRIMO AVVIO
   1. Doppio clic su VestizioneDCT.exe (oppure su Avvia_Vestizione_DCT.bat).

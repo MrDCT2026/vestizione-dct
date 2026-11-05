@@ -56,8 +56,8 @@ aw.cartella_programma = lambda: os.path.join(sd, "Vestizione_DCT_App")
 check("app: dati accanto al programma", aw.cartella_dati_predefinita() == os.path.join(sd, "Dati_VestizioneDCT"), aw.cartella_dati_predefinita())
 aw.cartella_programma = lambda: os.path.join(sd, "Vestizione_DCT_Portatile", "programma")
 check("portatile: stessi dati dell'app", aw.cartella_dati_predefinita() == os.path.join(sd, "Dati_VestizioneDCT"), aw.cartella_dati_predefinita())
-os.makedirs(os.path.join(sd, "Dati_VestizioneDCT"))
-check("cartella dati esistente ritrovata", aw.cartella_dati_predefinita() == os.path.join(sd, "Dati_VestizioneDCT"))
+os.makedirs(os.path.join(t, "Dati_VestizioneDCT"))                     # un'altra cartella dati piu' in alto non conta
+check("dati altrove ignorati", aw.cartella_dati_predefinita() == os.path.join(sd, "Dati_VestizioneDCT"))
 aw.cartella_programma = originale
 
 # 2. avvio vero
