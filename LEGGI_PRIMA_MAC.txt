@@ -1,0 +1,106 @@
+VESTIZIONE DCT - programma in prova (Mac)
+
+PRIMA VOLTA (una sola volta)
+1. Apri l'app Terminale (Cmd+Spazio, scrivi "Terminale").
+2. Scrivi:  python3 --version
+   Se non risponde, il Mac propone di installare gli "strumenti da riga di comando": accetta e attendi.
+3. Scrivi (e premi Invio):  cd  (con lo spazio finale) poi trascina nella finestra la cartella "py" estratta dallo zip, e premi Invio.
+4. Scrivi:  python3 -m pip install -r requirements.txt
+
+OGNI VOLTA
+- Nel Terminale, dentro la cartella:  python3 avvia.py
+  (oppure doppio clic su Avvia_Mac.command; se il Mac lo blocca: tasto destro > Apri)
+- Si apre il browser su http://127.0.0.1:8765
+- Per chiudere: nel Terminale premi Ctrl+C.
+
+PRIMO USO
+- Home > scegli il file VESTIZIONE_DCT_11.xlsm > Importa. Il file originale non viene toccato.
+- I dati del programma stanno nella cartella "VestizioneDCT" dentro la tua cartella utente,
+  con le copie di sicurezza (ultime 30) in "backup".
+
+DALL'IPAD (stessa rete Wi-Fi del Mac)
+- Avvia con:  python3 avvia.py --rete
+- Il Terminale scrive un indirizzo tipo http://192.168.1.20:8765 : aprilo in Safari sull'iPad.
+- Attenzione: finche' e' avviato con --rete, chiunque sia sulla stessa rete puo' aprire il programma.
+  Usalo solo a casa.
+
+COSA FUNZIONA ORA
+- Home: importazione, nuovo anno, esporta Rotazione_AAAA.xlsm.
+- Anno: i mesi, tasti Cong./Fest., Ass./Mal., 104, Corsi, Sind., RL, C. Rip. serv., C. Rip. pers., Cancella, note.
+- Personale: chi occupa ogni posizione, uscite e ingressi dal giorno scelto, graduatoria (su/giu', togli, aggiungi).
+- Anagrafica: orari dei turni, orari e priorita' dei sussidiari, ordine delle disponibilita', sempre "dal" un giorno in poi.
+- Settimana, passo 1: file Rotazione tornato dai colleghi e settimane (es. 45-47); l'anteprima di cosa cambierebbe compare in fondo alla stessa pagina; applicazione con copia di sicurezza.
+- RL: elenco dei riposi lavorati per anno, filtri per collega e mese, riepiloghi, esporta elenco (.xlsx).
+- Settimana: tabella per persona, blocchi dei giorni, esporta Settimana_NN_AAAA.xlsx.
+Tutte le schermate dello schizzo sono presenti.
+
+
+NOVITA' v0.24 (versione Windows)
+- Nuovo app_windows.py: avvio per Windows (anche da scheda SD). I dati stanno in Dati_VestizioneDCT
+  accanto alla cartella del programma, senza lettere di unita' fisse. Una sola copia per volta:
+  un secondo doppio clic riapre quella gia' in funzione.
+- Cartella windows/ (avvio .bat, LEGGIMI della scheda, nota tecnica per l'informatica) e
+  .github/workflows/windows.yml: costruzione e prove su Windows con GitHub Actions.
+- Prove aggiornate ai dati di VESTIZIONE_DCT_15; confronto con la macro esteso alle settimane 44-47
+  (le intestazioni dei giorni ora si cercano nel foglio). test_windows.py: prove dell'avvio.
+- Il programma registra solo il nome del file importato, non tutto il percorso.
+
+NOVITA' v0.23
+- Tolta la pagina "Regole" (solo consultazione). Orari e priorita' si vedono e si cambiano in Anagrafica:
+  ogni modifica vale dalla data scritta in alto a destra ("Le modifiche valgono dal").
+
+NOVITA' v0.22
+- Corretto: dopo l'importazione delle settimane il menu laterale poteva diventare lentissimo. Un invio di file
+  rimasto a meta' teneva occupato il server; ora ogni invio viene letto per conto suo e non blocca le altre pagine.
+- Corretto: aprendo molte volte Anno e Settimana la pagina tratteneva in memoria le tabelle gia' viste.
+- Il numero di versione compare in basso a destra (accanto a "2026 Bruno Roli").
+
+NOVITA' v0.21
+- Rotazione esportata: le note sulle celle sono numerate dopo i pulsanti, come fa Excel. Prima i numeri si
+  sovrapponevano ed Excel per Windows "riparava" il file togliendo pulsanti e note ("Forma disegno", "Commenti").
+- File ricevuti per email: Windows li marca come "da internet" ed Excel blocca le macro. Prima di aprirli:
+  clic destro sul file > Proprieta' > in basso spunta "Sblocca" > OK (vale anche per i colleghi).
+
+NOVITA' v0.20
+- Corretto: a volte i tasti della barra laterale non cambiavano pagina (la finestra del Mac apre connessioni
+  "di riserva" che bloccavano il server interno). Ora il server ne gestisce piu' d'una insieme.
+
+NOVITA' v0.19
+- Rotazione esportata: nuovo modello preso da una Rotazione esportata da Excel v15 (26/10/2026), con le macro nuove:
+  i colleghi possono mettere il corso su un rientro (MIS / C. Rip.: compare la diagonale) e "Annulla colore"
+  su una cella con diagonale ripristina il colore di sotto.
+  Dal modello sono stati tolti nome utente e percorso del computer.
+- L'esportazione non dipende piu' dalla numerazione degli stili del modello.
+- Se un collega mette o toglie un corso su un rientro, la reimportazione lo segnala "da gestire a mano".
+
+NOVITA' v0.18 (allineata a Excel v15)
+- C. Rip. serv. su un riposo: oltre ai turni scoperti c'e' la scelta "FOR - solo corso": il collega rientra solo
+  per un corso, senza turno da coprire (cella verde con diagonale lavanda; nel registro MIS con turno "CORSO").
+  Per toglierlo: prima il tasto Corsi (resta MIS), poi Cancella.
+- Settimana esportata: nella tabella delle note l'intestazione e' "DCT" (non piu' "Collega").
+- Prove: non dipendono piu' dai dati del file Excel di riferimento (giorni di prova scelti da sole). Tutte verdi con VESTIZIONE_DCT_15.xlsm.
+
+NOVITA' v0.17
+- Il disponibile 606 (domenica e festivi) copre il turno principale scoperto piu' tardi (es. 610).
+
+NOVITA' v0.14
+- Corso sopra MIS / C. Rip.: nelle tabelline dei giorni compare "MIS (Corso)" / "C. Rip. (Corso)".
+- Il file Rotazione esportato non attiva piu' l'avviso sulle informazioni personali.
+
+NOVITA' v0.11
+- Corso sopra MIS o C. Rip.: la diagonale ha il colore del rientro sotto (lilla MIS, magenta C. Rip.).
+
+NOVITA' v0.10
+- Pagina Settimana: a destra della domenica c'e' il riquadro "Note della settimana"
+  (le note inserite coi giorni, come nel foglio Excel).
+- Nuova pagina "Regole": solo consultazione (turni di ogni giorno, orari, ordine dei
+  disponibili con CU e FU, sussidiari, DCT minimi, colori). Per modificare orari e
+  priorita' si usa Anagrafica.
+
+COSTRUIRE L'APP (v0.16: app vera con finestra propria)
+1. Doppio clic su Costruisci_App_Mac.command (prima volta: clic destro > Apri). Serve Python 3 solo per costruire.
+2. Attendi "Fatto" (alcuni minuti). Compare la cartella App_Vestizione_DCT con "Vestizione DCT".
+3. Trascina "Vestizione DCT" in Applicazioni. Prima volta: clic destro > Apri.
+4. Si apre in una finestra propria, senza Terminale. Si chiude con Cmd+Q o chiudendo la finestra.
+5. Se la finestra non si apre, l'app usa Safari. Messaggi e errori in ~/VestizioneDCT/app.log: mandami quel file se serve.
+   I dati restano in ~/VestizioneDCT.

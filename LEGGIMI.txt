@@ -1,0 +1,38 @@
+VESTIZIONE DCT - motore di calcolo in Python (fase 1)  -  2026 Bruno Roli
+
+Contenuto
+  dct/modelli.py     strutture dati e colori delle celle
+  dct/calendario.py  festivi (Pasqua e Pasquetta incluse), modalita' del giorno, settimane ISO
+  dct/copertura.py   regole di copertura (porting di modCopertura, versione 11)
+  dct/xlsm.py        lettura del file VESTIZIONE_DCT_*.xlsm (serve solo per il confronto)
+  dct/db.py          archivio SQLite: importa dal file xlsm e fornisce i dati al motore
+  confronta.py       confronto con le settimane calcolate dal VBA
+  dct/operazioni.py  assenze, RL, MIS, cambi riposo, cancellazioni, corso sopra un rientro (regole di Modulo1)
+  test_operazioni.py 47 prove automatiche: python3 test_operazioni.py VESTIZIONE_DCT_11.xlsm
+  dct/generatore.py  rotazione annuale dai gruppi (turni e riposi)
+  test_generatore.py confronta la rotazione generata con quella del file (1288 celle) e controlla il 2027
+  dct/rotazione.py   esporta la Rotazione_AAAA.xlsm partendo dal modello (macro, pulsanti e tema restano quelli del modello)
+  prova_rotazione.py / confronta_rotazione.py  ricostruiscono la Rotazione del 2026 e la confrontano cella per cella con l'originale
+  modello/Rotazione_modello.xlsm  il modello usato per l'esportazione
+  dct/importa.py     importazione dai file dei colleghi con confronto a tre (APPLICA, CONFLITTO, MANUALE, MANTENUTA, SALTATA)
+  test_importa.py    26 prove dell'importazione
+  prove.py           esegue tutte le prove in una volta
+
+Uso:  python3 confronta.py VESTIZIONE_DCT_11.xlsm 43 44 45
+Richiede: Python 3 e openpyxl.
+
+ANAGRAFICA (fase 7)
+- dct/anagrafica.py: orari dei turni, orari e priorita' dei sussidiari, ordine delle disponibilita'.
+- Ogni modifica vale "dal" un giorno in poi (nuova versione di configurazione); il passato non cambia.
+- I codici dei turni non si modificano (cambiarli = nuova rotazione = nuovo progetto).
+- Si rifiutano: date nel passato, date precedenti a una modifica gia' programmata, codici diversi, orari non hh:mm.
+
+ESPORTA SETTIMANA (fase 8)
+- dct/settimana.py: esporta_settimana(archivio, anno, nn, cartella) -> Settimana_NN_AAAA.xlsx (nessuna macro).
+- Stesso foglio della macro: blocchi giorno, vista per persona, DCT in servizio, note, schema turni, ordine disponibilita'.
+- Orari e ordine disponibilita' vengono dall'Anagrafica in vigore il lunedi' della settimana.
+- confronta_settimana.py: confronto cella per cella (valori, colori, bordi, unioni) con le settimane del file xlsm.
+
+PERSONALE (fase 9)
+- dct/personale.py: ingresso/uscita di una persona in una posizione "dal" un giorno, annullamento di ingressi/uscite
+  programmati, graduatoria (aggiungi, togli, sposta). Il passato non si tocca; chi entra dalla graduatoria ne esce.

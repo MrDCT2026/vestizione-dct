@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Vestizione servizio DCT</title>
+<link rel="stylesheet" href="stile.css">
+</head>
+<body>
+<div id="app">
+  <header class="barra">
+    <div class="titolo">Vestizione servizio DCT</div>
+    <div id="stato-salvataggio" class="piccolo"></div>
+  </header>
+  <div class="corpo">
+    <nav id="menu" aria-label="Sezioni">
+      <a href="#home" data-v="home">Home</a>
+      <a href="#personale" data-v="personale">Personale</a>
+      <a href="#anagrafica" data-v="anagrafica">Anagrafica</a>
+      <a href="#anno" data-v="anno">Anno</a>
+      <a href="#settimana" data-v="settimana">Settimana</a>
+      <a href="#rl" data-v="rl">RL</a>
+      <div class="spazio"></div>
+      <div class="nota-menu">Copia di sicurezza automatica a ogni modifica</div>
+    </nav>
+    <main id="vista" tabindex="-1"></main>
+  </div>
+  <footer class="piede"><span id="messaggio" role="status"></span><span>2026 Bruno Roli · v0.24</span></footer>
+</div>
+<div id="dialogo" class="velo" hidden></div>
+<script src="app.js"></script>
+</body>
+</html>

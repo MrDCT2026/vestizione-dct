@@ -1,0 +1,33 @@
+﻿VESTIZIONE DCT PER WINDOWS - SCHEDA SD                        v0.24 - 2026 Bruno Roli
+=====================================================================================
+
+COSA C'E' SULLA SCHEDA
+  Vestizione_DCT_App\          versione "app": si apre in una finestra propria
+       VestizioneDCT.exe       <- doppio clic qui
+  Vestizione_DCT_Portatile\    versione "portatile": stesso programma, si apre in Edge
+       Avvia_Vestizione_DCT.bat <- doppio clic qui
+  Dati_VestizioneDCT\          i dati (archivio, copie di sicurezza): si crea al primo avvio.
+                               Le due versioni usano gli STESSI dati.
+  Per_informatica\             nota tecnica e impronte dei file
+
+PRIMA DI COPIARE SULLA SCHEDA
+  Lo zip scaricato da internet viene "marcato" da Windows. Prima di estrarlo:
+  clic destro sullo zip > Proprieta' > in basso spunta "Sblocca" > OK.
+  Poi estrai tutto e copia il contenuto nella radice della scheda SD.
+
+PRIMO AVVIO
+  1. Doppio clic su VestizioneDCT.exe (oppure su Avvia_Vestizione_DCT.bat).
+  2. Se compare "Windows ha protetto il PC": clic su "Ulteriori informazioni" > "Esegui comunque".
+     Succede perche' il programma non e' firmato digitalmente: non e' un errore.
+  3. Nella Home importa il file VESTIZIONE_DCT (.xlsm): da li' in poi i dati sono sulla scheda.
+
+COME SI CHIUDE
+  - App: si chiude la finestra.
+  - Portatile: si apre in Edge; finito il lavoro si chiude Edge e poi la finestra nera
+    "Vestizione DCT". Se si chiude solo Edge, un nuovo doppio clic su Avvia riapre il programma.
+  Prima di togliere la scheda: chiudere il programma, poi "Rimuovi l'hardware in modo sicuro".
+
+SE QUALCOSA NON VA
+  - L'app non apre la finestra: usare la versione portatile (stessi dati).
+  - Messaggi del programma: Dati_VestizioneDCT\app.log
+  - Copie di sicurezza: Dati_VestizioneDCT\backup (dopo ogni modifica, ultime 30).

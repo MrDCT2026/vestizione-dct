@@ -1,0 +1,11 @@
+__pycache__/
+*.pyc
+build/
+dist/
+SD/
+.costruzione/
+*.spec
+costruzione.log
+App_Vestizione_DCT/
+*.xlsm
+!modello/*.xlsm

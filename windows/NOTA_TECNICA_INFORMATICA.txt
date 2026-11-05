@@ -1,0 +1,50 @@
+﻿VESTIZIONE DCT - NOTA TECNICA PER L'INFORMATICA                v0.24 - 2026 Bruno Roli
+=====================================================================================
+
+SCOPO
+  Programma per la gestione della rotazione "Vestizione" DCT (turni, assenze, coperture,
+  settimane). Sostituisce le macro VBA del file VESTIZIONE_DCT.xlsm. I colleghi continuano
+  a usare il file Rotazione_AAAA.xlsm con la sua macro: il programma lo esporta e ne reimporta
+  le modifiche.
+
+COME E' FATTO
+  - Scritto in Python 3.12. Librerie esterne: openpyxl (lettura/scrittura file Excel),
+    lxml (XML). Per la versione app anche pywebview (finestra con Microsoft Edge WebView2).
+  - Un piccolo server web interno (libreria standard di Python, http.server) ascolta SOLO
+    su 127.0.0.1 (il computer stesso), porta 8765 o successive libere fino a 8784.
+    Non e' raggiungibile da altri computer della rete.
+  - L'interfaccia e' una pagina HTML/JavaScript contenuta nel programma: nessuna risorsa
+    scaricata da internet, nessun servizio esterno, nessuna telemetria.
+  - I dati sono un database SQLite (archivio.db) nella cartella Dati_VestizioneDCT accanto
+    al programma (sulla scheda SD). Copie di sicurezza in Dati_VestizioneDCT\backup.
+  - Nessuna installazione: nulla viene scritto nel registro di sistema o in Programmi e non
+    servono diritti di amministratore. La finestra della versione A tiene i suoi file
+    (WebView2) nella cartella dati; la versione B usa Edge come un normale sito.
+  - Nessuna macro: i file Excel vengono letti come dati, senza eseguire codice VBA.
+    La settimana esportata (Settimana_NN_AAAA.xlsx) non contiene macro.
+    La Rotazione_AAAA.xlsm esportata contiene la macro originale del file Excel dei colleghi,
+    copiata senza modifiche dal modello.
+  - Il programma non avvia altri programmi, salvo Microsoft Edge per mostrare la pagina
+    (versione portatile, o app se WebView2 non e' disponibile).
+
+LE DUE VERSIONI (stesso codice, stessi dati)
+  A. Vestizione_DCT_App\VestizioneDCT.exe
+     Costruita con PyInstaller: contiene Python e le librerie. Finestra propria (WebView2).
+     Eseguibile non firmato digitalmente.
+  B. Vestizione_DCT_Portatile\
+     python\       distribuzione "embeddable" ufficiale di Python per Windows (python.org),
+                   eseguibile firmato da Python Software Foundation; python\lib: openpyxl, lxml
+     programma\    il codice sorgente del programma, leggibile (file .py, .html, .js, .css)
+     Avvia_Vestizione_DCT.bat   avvio: python\python.exe programma\app_windows.py --browser
+
+COME E' COSTRUITA
+  Su GitHub Actions (macchina virtuale Windows di GitHub), da un repository privato: prove
+  automatiche del programma, costruzione della versione A, assemblaggio della versione B con
+  i pacchetti ufficiali (python.org, PyPI), prove di avvio di entrambe.
+  Per_informatica\IMPRONTE_SHA256.txt elenca l'impronta SHA-256 di ogni file consegnato.
+
+PER CONSENTIRNE L'USO (indicazioni, da valutare)
+  - Versione B: e' sufficiente consentire python.exe (firmato PSF) dalla cartella del programma.
+  - Versione A: consentire VestizioneDCT.exe (per impronta o percorso).
+  - I file Rotazione_AAAA.xlsm ricevuti per email hanno le macro bloccate (Mark of the Web):
+    servono "Sblocca" nelle proprieta' del file oppure una posizione attendibile.
