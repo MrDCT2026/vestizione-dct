@@ -1,0 +1,112 @@
+# Costruisce e prova Vestizione DCT per Windows (app con finestra propria + versione portatile)
+# e prepara lo zip da copiare sulla scheda SD.
+name: Windows
+
+on:
+  push:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  PYTHON_EMBED: "3.12.10"
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Pacchetti
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install openpyxl lxml pywebview pyinstaller pillow
+
+      - name: Prove del motore sul file di riferimento (se c'e' la chiave)
+        shell: bash
+        env:
+          PROVA_CHIAVE: ${{ secrets.PROVA_CHIAVE }}
+        run: |
+          if [ -z "$PROVA_CHIAVE" ]; then
+            echo "::warning::Chiave PROVA_CHIAVE assente: salto le prove sul file VESTIZIONE_DCT_15."
+            exit 0
+          fi
+          openssl enc -d -aes-256-cbc -pbkdf2 -iter 200000 -in prove_dati/VESTIZIONE_DCT_15.xlsm.enc \
+            -out "$RUNNER_TEMP/rif.xlsm" -pass env:PROVA_CHIAVE
+          python prove.py "$RUNNER_TEMP/rif.xlsm"
+          rm -f "$RUNNER_TEMP/rif.xlsm"
+
+      - name: Prove dell'avvio Windows (codice sorgente)
+        run: python test_windows.py
+
+      - name: Costruisco l'app (PyInstaller)
+        run: |
+          pyinstaller --noconfirm --clean --windowed --name VestizioneDCT `
+            --icon icona.png `
+            --add-data "dct/app/static;dct/app/static" `
+            --add-data "modello;modello" `
+            --collect-submodules dct --collect-all webview `
+            app_windows.py
+
+      - name: Monto la versione portatile (Python ufficiale embeddable)
+        shell: pwsh
+        run: |
+          $sd = "SD"
+          $port = "$sd/Vestizione_DCT_Portatile"
+          New-Item -ItemType Directory -Force "$port/python", "$port/programma" | Out-Null
+          $zip = "python-$env:PYTHON_EMBED-embed-amd64.zip"
+          Invoke-WebRequest "https://www.python.org/ftp/python/$env:PYTHON_EMBED/$zip" -OutFile $zip
+          Expand-Archive $zip -DestinationPath "$port/python"
+          # percorsi relativi: la libreria standard, i pacchetti in python\lib e il nostro programma
+          $pth = Get-ChildItem "$port/python/python3*._pth" | Select-Object -First 1
+          Set-Content -Encoding ascii $pth.FullName @("$($pth.BaseName).zip", ".", "lib", "..\programma")
+          python -m pip install --target "$port/python/lib" --only-binary=:all: openpyxl lxml
+          Copy-Item -Recurse dct, modello "$port/programma/"
+          Copy-Item app_windows.py, avvia.py, icona.png, requirements.txt "$port/programma/"
+          Get-ChildItem -Recurse -Directory -Filter __pycache__ $port | Remove-Item -Recurse -Force
+          Copy-Item windows/Avvia_Vestizione_DCT.bat "$port/"
+          # app
+          Copy-Item -Recurse dist/VestizioneDCT "$sd/Vestizione_DCT_App"
+          # istruzioni
+          New-Item -ItemType Directory -Force "$sd/Per_informatica" | Out-Null
+          Copy-Item windows/LEGGIMI_SCHEDA_SD.txt "$sd/"
+          Copy-Item windows/NOTA_TECNICA_INFORMATICA.txt "$sd/Per_informatica/"
+          # elenco dei file con impronta SHA-256, per chi vuole controllare
+          Get-ChildItem -Recurse -File $sd | Where-Object { $_.Name -ne "IMPRONTE_SHA256.txt" } |
+            Get-FileHash -Algorithm SHA256 |
+            ForEach-Object { "{0}  {1}" -f $_.Hash, ($_.Path.Substring((Resolve-Path $sd).Path.Length + 1)) } |
+            Set-Content -Encoding utf8 "$sd/Per_informatica/IMPRONTE_SHA256.txt"
+
+      - name: Prova la versione portatile
+        run: |
+          & .\SD\Vestizione_DCT_Portatile\python\python.exe -c "import sqlite3, openpyxl, lxml.etree, dct.app.server, sys; print('pacchetti ok', sys.version)"
+          python test_windows.py SD\Vestizione_DCT_Portatile\python\python.exe SD\Vestizione_DCT_Portatile\programma\app_windows.py
+
+      - name: Prova l'app costruita
+        run: python test_windows.py SD\Vestizione_DCT_App\VestizioneDCT.exe
+
+      - name: Prove della pagina con la versione portatile (se c'e' la chiave)
+        shell: bash
+        env:
+          PROVA_CHIAVE: ${{ secrets.PROVA_CHIAVE }}
+        run: |
+          [ -z "$PROVA_CHIAVE" ] && exit 0
+          openssl enc -d -aes-256-cbc -pbkdf2 -iter 200000 -in prove_dati/VESTIZIONE_DCT_15.xlsm.enc \
+            -out "$RUNNER_TEMP/rif.xlsm" -pass env:PROVA_CHIAVE
+          # test_app.py copiato in una cartella vuota: cosi' usa il codice della versione portatile (programma\)
+          mkdir -p "$RUNNER_TEMP/solo_test" && cp test_app.py "$RUNNER_TEMP/solo_test/"
+          SD/Vestizione_DCT_Portatile/python/python.exe "$RUNNER_TEMP/solo_test/test_app.py" "$RUNNER_TEMP/rif.xlsm"
+          rm -f "$RUNNER_TEMP/rif.xlsm"
+
+      - name: Zip per la scheda SD
+        uses: actions/upload-artifact@v4
+        with:
+          name: Vestizione_DCT_Windows_SD
+          path: SD/
+          retention-days: 30
