@@ -70,6 +70,18 @@ function modulo(titolo, testo, campi, ok) {
 function segnaStato() {
   const s = S.stato;
   $("#stato-salvataggio").textContent = s && s.aperto ? "Anno " + (S.anno || "") + (s.salvato ? " · salvato alle " + s.salvato : "") : "";
+  const b = $("#annulla-modifica");
+  if (b) {
+    b.hidden = !(s && s.annulla);
+    if (s && s.annulla) b.title = "Annulla: " + s.annulla.descr + " (" + s.annulla.ora + ")";
+  }
+}
+async function annullaModifica() {
+  const a = S.stato && S.stato.annulla;
+  if (!a) return;
+  if (!await dialogo("Annulla l'ultima modifica", "Si torna a com'era prima di: " + a.descr + " (" + a.ora + "). Si può ripetere per tornare ancora più indietro.", { ok: "Annulla la modifica", annulla: "Lascia com'è" })) return;
+  try { const r = await api("/api/annulla", {}); S.anno = S.anno || null; await aggiornaStato(); messaggio("Annullato: " + r.annullato + ".", "ok"); await vistaCorrente(true); }
+  catch (e) { messaggio(e.message, "err"); }
 }
 async function aggiornaStato() {
   S.stato = await api("/api/stato");
@@ -378,10 +390,13 @@ async function vistaPersonale(v) {
   for (const r of d.elenco) {
     const az = el("td", { class: "az" });
     if (r.nome) {
+      az.append(el("button", { onclick: () => sostituisci(r, d) }, "Sostituisci…"), " ");
       az.append(el("button", { onclick: async () => {
-        const o = await modulo("Uscita – posizione " + r.pos, r.nome + " smette di prestare servizio. Indica l'ultimo giorno di servizio: da quella data in poi la posizione resta libera.", [{ id: "data", label: "Ultimo giorno di servizio", tipo: "date", valore: iso(domani) }], "Registra uscita");
-        if (o) azionePers("uscita", { pos: r.pos, data: o.data }, "Uscita registrata.");
-      } }, "Uscita…"));
+        const o = r.al
+          ? await modulo("Cambia uscita – posizione " + r.pos, r.nome + " ha l'uscita programmata: ultimo giorno " + dmy(r.al) + ". Scrivi la nuova data (prima o dopo).", [{ id: "data", label: "Ultimo giorno di servizio", tipo: "date", valore: r.al }], "Cambia uscita")
+          : await modulo("Uscita – posizione " + r.pos, r.nome + " smette di prestare servizio. Indica l'ultimo giorno di servizio: da quella data in poi la posizione resta libera.", [{ id: "data", label: "Ultimo giorno di servizio", tipo: "date", valore: iso(domani) }], "Registra uscita");
+        if (o) azionePers("uscita", { pos: r.pos, data: o.data }, r.al ? "Uscita cambiata." : "Uscita registrata.");
+      } }, r.al ? "Cambia uscita…" : "Uscita…"));
     } else {
       az.append(el("button", { onclick: () => ingresso(r.pos, d) }, "Nuovo ingresso…"));
     }
@@ -412,6 +427,19 @@ async function vistaPersonale(v) {
       if (o && o.nome.trim()) azionePers("aggiungi", { nome: o.nome, posto: o.posto ? +o.posto : null }, "Aggiunto.");
     } }, "Aggiungi…")));
   v.append(el("div", { class: "pers", style: "margin-top:12px" }, sx, gr));
+}
+async function sostituisci(r, d) {
+  const dom = new Date(d.data); dom.setDate(dom.getDate() + 1);
+  const campi = [];
+  if (d.graduatoria.length) campi.push({ id: "scelta", label: "Chi entra", tipo: "select", valore: d.graduatoria[0], opzioni: [...d.graduatoria, "Altro nome (non in graduatoria)"] });
+  campi.push({ id: "altro", label: "Nome (solo se non è in graduatoria)", tipo: "text" });
+  campi.push({ id: "data", label: "Primo giorno di servizio del nuovo", tipo: "date", valore: (r.al ? new Date(new Date(r.al).getTime() + 86400000) : dom).toISOString().slice(0, 10) });
+  const o = await modulo("Sostituisci – posizione " + r.pos, r.nome + " esce il giorno prima della data scelta; dalla data scelta nella stessa posizione entra il nuovo.", campi, "Registra sostituzione");
+  if (!o) return;
+  const inGrad = o.scelta && o.scelta !== "Altro nome (non in graduatoria)";
+  const nome = inGrad ? o.scelta : (o.altro || "").trim();
+  if (!nome) { messaggio("Scrivi il nome.", "err"); return; }
+  azionePers("sostituisci", { pos: r.pos, nome, data: o.data, da_graduatoria: inGrad }, "Sostituzione registrata.");
 }
 async function ingresso(pos, d) {
   const dom = new Date(d.data); dom.setDate(dom.getDate() + 1);
@@ -508,6 +536,28 @@ async function vistaAnagrafica(v) {
       el("div", { class: "riga", style: "margin-top:10px" }, el("button", { onclick: () => azioneAnag("disponibilita", { modalita: m, ordine, dal }, "Disponibilità salvate dal " + dmy(dal) + ".") }, "Salva"))));
   }
   v.append(gs);
+  // turni di Natale (25/12): orari propri, il resto come i festivi
+  if (a.natale) {
+    const n = a.natale, campi = [];
+    const tb = el("tbody");
+    const riga = (tipo, [c, i, f]) => {
+      const ii = el("input", { class: "ora", type: "text", inputmode: "numeric", maxlength: 5, placeholder: "hh:mm", value: i });
+      const ff = el("input", { class: "ora", type: "text", inputmode: "numeric", maxlength: 5, placeholder: "hh:mm", value: f });
+      campi.push([c, ii, ff]);
+      tb.append(el("tr", {}, el("td", { class: "n" }, c), el("td", { class: "piccolo" }, tipo), el("td", {}, ii, " – ", ff)));
+    };
+    n.turni.forEach(x => riga("principale", x));
+    n.sussidiari.forEach(x => riga("sussidiario", x));
+    v.append(el("div", { class: "scheda", style: "margin-top:14px" },
+      el("h2", {}, "Turni di Natale (25 dicembre)"),
+      el("p", { class: "piccolo" }, "Valgono solo il 25/12, qualunque giorno della settimana; il 26/12 è un festivo normale. Si coprono " + n.turni_coperti +
+        " turni; dal presente successivo, eccedenti in FU come nei festivi. Disponibili, in ordine: " + n.disponibili.join(", ") +
+        " (l'ultimo copre il turno che inizia più tardi). Versione del " + dmy(n.valida_dal) + (n.programmate.length ? "; cambiamenti programmati dal " + n.programmate.map(dmy).join(", ") : "") + ". Una modifica vale dal primo 25 dicembre dalla data scelta in alto."),
+      el("table", { class: "elenco" }, el("thead", {}, el("tr", {}, ["Turno", "", "Orario"].map(x => el("th", {}, x)))), tb),
+      el("div", { class: "riga", style: "margin-top:10px" }, el("button", { onclick: () => azioneAnag("natale",
+        { righe: campi.map(([c, ii, ff]) => ({ codice: c, inizio: ii.value, fine: ff.value })), dal },
+        "Orari di Natale salvati: valgono dal primo 25 dicembre dal " + dmy(dal) + " in poi.") }, "Salva"))));
+  }
 }
 
 /* ---------------- Anteprima importazione (in fondo alla pagina Settimana) ---------------- */

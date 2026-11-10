@@ -107,5 +107,20 @@ an.elimina_versione(a, date(2027, 1, 10), OGGI)
 check("eliminata", an.leggi(a, date(2027, 1, 10))["disponibilita"][mod] == lista and len(an.versioni(a)) == 4)
 check("origine non eliminabile", errore(an.elimina_versione, a, date.fromisoformat(min(a.versioni)), date(2000, 1, 1)))
 
+# orari di Natale con validita' "dal"
+import dct.anagrafica as _an
+n0 = _an.natale_leggi(a, date(2026, 12, 25))
+_an.imposta_orari_natale(a, {"605": ("09:00", "13:00")}, date(2026, 11, 10), OGGI)   # vale dal 25/12/2026
+check("Natale: modifica di domani vale gia' questo Natale", Motore(a).orario_turno("605", "Domenica", date(2026, 12, 25)) == "09:00")
+_an.imposta_orari_natale(a, {"603": ("08:00", "12:00")}, date(2027, 1, 1), OGGI)        # vale dal 25/12/2027
+m_ = Motore(a)
+check("Natale: nuovo orario dal 2027", m_.orario_turno("603", "Domenica", date(2027, 12, 25)) == "08:00"
+      and m_.orario_turno("603", "Domenica", date(2026, 12, 25)) == "07:45")
+check("Natale: il resto copiato", _an.natale_leggi(a, date(2027, 12, 25))["disponibili"] == n0["disponibili"]
+      and _an.natale_leggi(a, date(2027, 12, 25))["turni_coperti"] == 8)
+check("Natale: orario non valido rifiutato", errore(_an.imposta_orari_natale, a, {"603": ("8", "12:00")}, date(2028, 1, 2), OGGI))
+check("Natale: prima di una modifica gia' programmata rifiutato", errore(_an.imposta_orari_natale, a, {}, date(2026, 11, 20), OGGI))
+check("Natale: passato rifiutato", errore(_an.imposta_orari_natale, a, {}, date(2020, 1, 1), OGGI))
+
 print("   prove riuscite: %d, fallite: %d" % (OK, KO))
 sys.exit(1 if KO else 0)

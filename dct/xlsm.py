@@ -30,6 +30,24 @@ class Archivio:
         self.assegnazioni = self._leggi_assegnazioni()
         self._cache = {}
 
+    def natale_alla(self, d):
+        """Turni di Natale (25/12): dal foglio Config_Natale se c'e', altrimenti i valori di partenza."""
+        if (d.month, d.day) != (12, 25):
+            return None
+        if not hasattr(self, "_natale"):
+            from .db import _leggi_config_natale, NATALE_BASE, NATALE_DAL
+            righe = _leggi_config_natale(self.wb) or [(NATALE_DAL,) + r for r in NATALE_BASE]
+            out = {}
+            for v, tipo, cod, ordine, ini, fin in sorted(righe, key=lambda r: (r[0], r[1], r[3])):
+                x = out.setdefault(v, {"TURNO": [], "SUSS": [], "DISP": [], "PARAM": {}})
+                if tipo == "PARAM":
+                    x["PARAM"][cod] = ordine
+                elif tipo in x:
+                    x[tipo].append((cod, ini, fin))
+            self._natale = out
+        valide = [v for v in self._natale if v <= d.isoformat()]
+        return self._natale[max(valide) if valide else min(self._natale)]
+
     def config_alla(self, d):
         return self.config
 

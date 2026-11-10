@@ -78,16 +78,42 @@ def sposta_in_graduatoria(arch, nome, posto):
 
 
 def uscita(arch, pos, ultimo_giorno, oggi):
-    """La persona che occupa la posizione smette di prestare servizio dopo ultimo_giorno."""
+    """La persona che occupa la posizione smette di prestare servizio dopo ultimo_giorno.
+    Se ha gia' un'uscita programmata, la data si puo' cambiare: prima o dopo, purche' nessuno subentri prima."""
     _futuro(ultimo_giorno, oggi)
-    att = [p for p in arch.persone if p.pos == pos and p.nome and p.inizio <= ultimo_giorno <= p.fine]
-    if not att:
+    cand = [p for p in arch.persone if p.pos == pos and p.nome and p.inizio <= ultimo_giorno and p.fine >= oggi]
+    if not cand:
         raise ErrorePersonale("La posizione %d è libera il %s." % (pos, ultimo_giorno.strftime("%d/%m/%Y")))
-    p = att[0]
+    p = max(cand, key=lambda x: x.inizio)
+    if p.fine < ultimo_giorno:      # uscita spostata piu' avanti: nessuno deve subentrare prima
+        dopo = [q for q in arch.persone if q.pos == pos and q.nome and q is not p and p.fine < q.inizio <= ultimo_giorno]
+        if dopo:
+            raise ErrorePersonale("Dal %s in posizione %d subentra %s: annulla prima il suo ingresso." % (
+                dopo[0].inizio.strftime("%d/%m/%Y"), pos, dopo[0].nome))
     arch.con.execute("UPDATE persone SET fine=? WHERE pos=? AND nome=? AND IFNULL(inizio,'')=IFNULL(?,'')",
                      (ultimo_giorno.isoformat(), pos, p.nome, _iso(p.inizio)))
     arch.con.commit()
     arch.ricarica_persone()
+
+
+def sostituisci(arch, pos, nome, dal, oggi, da_graduatoria=True):
+    """Chi occupa la posizione esce il giorno prima di dal e nella stessa posizione entra nome, dal giorno dal."""
+    nome = (nome or "").strip()
+    if not nome:
+        raise ErrorePersonale("Scrivi il nome.")
+    ieri = dal - timedelta(days=1)
+    if ieri < oggi:
+        raise ErrorePersonale("Il passato non si tocca: il primo giorno del nuovo deve essere dal %s in poi." % (
+            (oggi + timedelta(days=1)).strftime("%d/%m/%Y")))
+    for p in arch.persone:
+        if p.nome.lower() == nome.lower() and p.fine >= dal:
+            raise ErrorePersonale("%s è già in servizio in posizione %d." % (nome, p.pos))
+    dopo = [q for q in arch.persone if q.pos == pos and q.nome and q.inizio >= dal]
+    if dopo:
+        raise ErrorePersonale("Dal %s in posizione %d subentra già %s: annulla prima quell'ingresso." % (
+            dopo[0].inizio.strftime("%d/%m/%Y"), pos, dopo[0].nome))
+    uscita(arch, pos, ieri, oggi)
+    ingresso(arch, pos, nome, dal, oggi, da_graduatoria)
 
 
 def annulla_uscita(arch, pos, oggi):

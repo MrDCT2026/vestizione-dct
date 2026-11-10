@@ -11,6 +11,7 @@ import webbrowser
 from datetime import date, datetime, timedelta
 from http.server import BaseHTTPRequestHandler, HTTPServer, ThreadingHTTPServer
 import threading
+import sqlite3
 
 # Il server accetta piu' connessioni insieme (WebKit, la finestra del Mac e Safari, apre a volte una connessione
 # "di riserva" senza usarla: con un server a connessione singola le pagine restavano bloccate).
@@ -55,6 +56,7 @@ class Programma:
         self.arch = None
         self.ultimo_salvataggio = None
         self.imp = None          # importazione in anteprima: {cambi, anno, nome, fuori}
+        self._pre = None         # fotografia dell'archivio prima della modifica in corso (per "Annulla")
         if os.path.exists(self.percorso):
             self.apri()
 
@@ -77,9 +79,89 @@ class Programma:
             self.arch = None
         os.replace(nuovo, self.percorso)
         self.apri()
+        self._registra_annulla()
+
+    # ---------- annulla l'ultima modifica
+    # Prima di ogni modifica si fa una fotografia dell'archivio; se la modifica riesce, la fotografia entra
+    # nell'elenco "annulla" (backup/annulla, ultime 30, con la descrizione). Annulla rimette l'ultima fotografia.
+    MAX_ANNULLA = 30
+
+    def _dir_annulla(self):
+        d = os.path.join(self.cartella, "backup", "annulla")
+        os.makedirs(d, exist_ok=True)
+        return d
+
+    def _elenco_annulla(self):
+        try:
+            with open(os.path.join(self._dir_annulla(), "elenco.json"), encoding="utf-8") as f:
+                el = json.load(f)
+            return [x for x in el if os.path.exists(os.path.join(self._dir_annulla(), x["file"]))]
+        except (OSError, ValueError):
+            return []
+
+    def _scrivi_elenco_annulla(self, el):
+        with open(os.path.join(self._dir_annulla(), "elenco.json"), "w", encoding="utf-8") as f:
+            json.dump(el, f, ensure_ascii=False)
+
+    def prepara_annulla(self, descrizione):
+        """Fotografia dell'archivio prima di una modifica."""
+        self._pre = None
+        if self.arch is None or not descrizione:
+            return
+        self.arch.con.commit()
+        pre = os.path.join(self._dir_annulla(), "_prima.db")
+        dst = sqlite3.connect(pre)
+        try:
+            self.arch.con.backup(dst)
+        finally:
+            dst.close()
+        self._pre = (pre, descrizione)
+
+    def _registra_annulla(self):
+        if not getattr(self, "_pre", None):
+            return
+        pre, descr = self._pre
+        self._pre = None
+        adesso = datetime.now()
+        nome = "prima_%s.db" % adesso.strftime("%Y%m%d_%H%M%S_%f")
+        try:
+            os.replace(pre, os.path.join(self._dir_annulla(), nome))
+            el = self._elenco_annulla() + [{"file": nome, "descr": descr, "ora": adesso.strftime("%d/%m/%Y %H:%M")}]
+            for x in el[:-self.MAX_ANNULLA]:
+                try:
+                    os.remove(os.path.join(self._dir_annulla(), x["file"]))
+                except OSError:
+                    pass
+            self._scrivi_elenco_annulla(el[-self.MAX_ANNULLA:])
+        except OSError:
+            pass
+
+    def ultimo_annullabile(self):
+        el = self._elenco_annulla()
+        return el[-1] if el else None
+
+    def annulla(self):
+        """Riporta l'archivio a com'era prima dell'ultima modifica. Restituisce la descrizione della modifica tolta."""
+        el = self._elenco_annulla()
+        if not el:
+            raise Errore("Non c'è nessuna modifica da annullare.")
+        x = el[-1]
+        foto = os.path.join(self._dir_annulla(), x["file"])
+        if self.arch is not None:
+            self.arch.con.commit()
+            self.arch.con.close()
+            self.arch = None
+        shutil.copy(foto, self.percorso)
+        self.apri()
+        self.imp = None
+        os.remove(foto)
+        self._scrivi_elenco_annulla(el[:-1])
+        self.copia_di_sicurezza()
+        return x["descr"]
 
     def copia_di_sicurezza(self):
         """Dopo ogni modifica: copia dell'archivio (se ne tengono 30)."""
+        self._registra_annulla()
         self.arch.con.commit()
         adesso = datetime.now()
         self.ultimo_salvataggio = adesso
@@ -105,7 +187,8 @@ def stato(P):
     mesi = _mesi_presenti(P.arch)
     return {"aperto": True, "oggi": P.oggi.isoformat(), "mesi": mesi, "programma": "Vestizione DCT", "cartella": os.path.abspath(P.cartella),
             "anni": sorted({a for a, _ in mesi}),
-            "salvato": P.ultimo_salvataggio.strftime("%H:%M") if P.ultimo_salvataggio else None}
+            "salvato": P.ultimo_salvataggio.strftime("%H:%M") if P.ultimo_salvataggio else None,
+            "annulla": P.ultimo_annullabile()}
 
 
 def _celle_giorni(P, giorni):
@@ -339,6 +422,7 @@ def api_get(P, percorso, q):
                 "turni": [{"codice": c, "orari": {m: list(o) for m, o in mm.items()}} for c, mm in a["turni"].items()],
                 "sussidiari": {k: [{"codice": c, "inizio": i, "fine": f} for c, i, f in v] for k, v in a["sussidiari"].items()},
                 "disponibilita": a["disponibilita"],
+                "natale": an.natale_leggi(P.arch, d),
                 "programmate": [v for v in an.versioni(P.arch) if v > P.oggi.isoformat()]}
     if percorso == "/api/rl_turni":
         d = _data(q["data"])
@@ -369,6 +453,8 @@ def api_post(P, percorso, corpo):
             pe.uscita(A, int(corpo["pos"]), _data(corpo["data"]), oggi)
         elif az == "ingresso":
             pe.ingresso(A, int(corpo["pos"]), corpo["nome"], _data(corpo["data"]), oggi, bool(corpo.get("da_graduatoria", True)))
+        elif az == "sostituisci":
+            pe.sostituisci(A, int(corpo["pos"]), corpo["nome"], _data(corpo["data"]), oggi, bool(corpo.get("da_graduatoria", True)))
         elif az == "annulla_uscita":
             pe.annulla_uscita(A, int(corpo["pos"]), oggi)
         elif az == "annulla_ingresso":
@@ -388,7 +474,9 @@ def api_post(P, percorso, corpo):
         A, oggi, dal = P.arch, P.oggi, _data(corpo["dal"]) if corpo.get("dal") else None
         if dal is None:
             raise Errore("Indica da quale giorno vale la modifica.")
-        if az == "turno":
+        if az == "natale":
+            an.imposta_orari_natale(A, {r["codice"]: (r["inizio"], r["fine"]) for r in corpo["righe"]}, dal, oggi)
+        elif az == "turno":
             an.imposta_orari_turno(A, corpo["codice"], {m: tuple(o) for m, o in corpo["orari"].items()}, dal, oggi)
         elif az == "sussidiari":
             an.imposta_sussidiari(A, corpo["chiave"], [(r["codice"], r["inizio"], r["fine"]) for r in corpo["righe"]], dal, oggi)
@@ -412,6 +500,61 @@ def api_post(P, percorso, corpo):
     if e.ok:
         P.copia_di_sicurezza()
     return esito_json(e)
+
+
+NOMI_TASTI = {"CONG_FEST": "Cong./Fest.", "ASS_MAL": "Ass./Mal.", "104": "104", "CORSI": "Corsi", "SIND": "Sind.",
+              "RL": "RL", "MIS": "MIS", "C_RIP": "C. Rip.", "RU": "RU"}
+
+
+def descrivi_modifica(P, percorso, corpo):
+    """Descrizione in italiano della modifica (per "Annulla"); None se la richiesta non modifica l'archivio."""
+    if percorso in ("/api/import/analizza", "/api/import/annulla", "/api/annulla"):
+        return None
+    try:
+        c = json.loads(corpo or b"{}") if percorso != "/api/importa" else {}
+    except ValueError:
+        c = {}
+    gm = lambda x: _data(x).strftime("%d/%m") if x else ""
+    nome_pos = lambda p, d=None: (P.mot.chi_in_servizio(int(p), _data(d) if d else P.oggi) if P.arch else "") or "pos. %s" % p
+    try:
+        if percorso == "/api/importa":
+            return "Importazione del file Excel"
+        if percorso == "/api/genera_anno":
+            return "Creazione dell'anno %s" % c.get("anno", "")
+        if percorso == "/api/import/applica":
+            return "Importazione dalla Rotazione" + (" (%s)" % P.imp["nome"] if P.imp and P.imp.get("nome") else "")
+        if percorso == "/api/tasto":
+            celle = c.get("celle", [])
+            chi = nome_pos(celle[0][1], celle[0][0]) + (" del %s" % gm(celle[0][0])) if celle else ""
+            return "%s – %s%s" % (NOMI_TASTI.get(c.get("tasto"), c.get("tasto", "Tasto")), chi,
+                                   (" e altre %d celle" % (len(celle) - 1)) if len(celle) > 1 else "")
+        if percorso == "/api/cancella":
+            return "Cancella – %s del %s" % (nome_pos(c["pos"], c["data"]), gm(c["data"]))
+        if percorso == "/api/rl":
+            return "RL – %s del %s" % (nome_pos(c["pos"], c["data"]), gm(c["data"]))
+        if percorso == "/api/cambio_servizio":
+            return "C. Rip. serv. – %s del %s" % (nome_pos(c["pos"], c["data"]), gm(c["data"]))
+        if percorso == "/api/cambio_personale":
+            return "C. Rip. pers. – %s e %s del %s" % (nome_pos(c["pos1"], c["data"]), nome_pos(c["pos2"], c["data"]), gm(c["data"]))
+        if percorso == "/api/nota":
+            return "Nota – %s del %s" % (nome_pos(c["pos"], c["data"]), gm(c["data"]))
+        if percorso.startswith("/api/personale/"):
+            az = percorso.rsplit("/", 1)[1]
+            return {"uscita": "Uscita – posizione %s" % c.get("pos"),
+                    "ingresso": "Ingresso di %s in posizione %s" % (c.get("nome"), c.get("pos")),
+                    "sostituisci": "Sostituzione in posizione %s con %s" % (c.get("pos"), c.get("nome")),
+                    "annulla_uscita": "Annullata l'uscita – posizione %s" % c.get("pos"),
+                    "annulla_ingresso": "Annullato l'ingresso – posizione %s" % c.get("pos"),
+                    "aggiungi": "%s aggiunto in graduatoria" % c.get("nome"),
+                    "togli": "%s tolto dalla graduatoria" % c.get("nome"),
+                    "sposta": "%s spostato in graduatoria" % c.get("nome")}.get(az, "Personale")
+        if percorso.startswith("/api/anagrafica/"):
+            az = percorso.rsplit("/", 1)[1]
+            return {"turno": "Orari del turno %s" % c.get("codice"), "sussidiari": "Sussidiari",
+                    "disponibilita": "Ordine dei disponibili", "natale": "Orari dei turni di Natale", "elimina": "Eliminata una modifica dell'anagrafica"}.get(az, "Anagrafica")
+    except (KeyError, IndexError, ValueError, TypeError):
+        pass
+    return "Modifica"
 
 
 class Gestore(BaseHTTPRequestHandler):
@@ -498,6 +641,11 @@ class Gestore(BaseHTTPRequestHandler):
         u = urllib.parse.urlparse(self.path)
         corpo = getattr(self, "_corpo", b"")
         try:
+            self.P.prepara_annulla(descrivi_modifica(self.P, u.path, corpo))
+            if u.path == "/api/annulla":
+                if self.P.arch is None and not self.P.ultimo_annullabile():
+                    raise Errore("Nessun archivio.")
+                return self._json({"ok": True, "annullato": self.P.annulla()})
             if u.path == "/api/import/analizza":
                 q = {k: v[0] for k, v in urllib.parse.parse_qs(u.query).items()}
                 return self._json(import_analizza(self.P, corpo, q))
@@ -521,6 +669,8 @@ class Gestore(BaseHTTPRequestHandler):
             self._json({"errore": str(e)}, 400)
         except (KeyError, ValueError, an.ErroreAnagrafica, pe.ErrorePersonale) as e:
             self._json({"errore": str(e)}, 400)
+        finally:
+            self.P._pre = None      # se la modifica non e' riuscita la fotografia non serve
 
     def _esporta(self, percorso, q):
         P = self.P

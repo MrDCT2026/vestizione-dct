@@ -6,6 +6,71 @@ from .modelli import *
 
 DAL_ORIGINE = "2000-01-01"   # data di validita' della configurazione di partenza
 
+# Turni di Natale (25/12), come Config_Natale del VBA v18 (09/11/2026): (tipo, codice, ordine, inizio, fine).
+# Tipi: TURNO (principali), SUSS (sussidiari), DISP (coda dei disponibili), PARAM (TurniCoperti: valore in ordine).
+NATALE_DAL = "2026-12-25"
+NATALE_BASE = [      # v18b: il 630 e' un turno principale, nessun sussidiario
+    ("TURNO", "603", 1, "07:45", "11:45"), ("TURNO", "605", 2, "08:30", "12:30"),
+    ("TURNO", "604", 3, "12:00", "16:00"), ("TURNO", "608", 4, "12:30", "16:30"),
+    ("TURNO", "606", 5, "16:00", "20:00"), ("TURNO", "602", 6, "16:30", "20:30"),
+    ("TURNO", "630", 7, "20:15", "00:15"), ("TURNO", "610", 8, "20:30", "00:30"),
+    ("DISP", "601", 1, "", ""), ("DISP", "607V", 2, "", ""), ("DISP", "Dd8", 3, "", ""),
+    ("DISP", "Dd2", 4, "", ""), ("DISP", "Dd5", 5, "", ""),
+    ("PARAM", "TurniCoperti", 8, "", ""),
+]
+# valori di partenza della v0.29 (630 sussidiario): se un archivio li ha ancora cosi', si sostituiscono
+_NATALE_BASE_V029 = [
+    ("TURNO", "603", 1, "07:45", "11:45"), ("TURNO", "605", 2, "08:30", "12:30"),
+    ("TURNO", "604", 3, "12:00", "16:00"), ("TURNO", "608", 4, "12:30", "16:30"),
+    ("TURNO", "606", 5, "16:00", "20:00"), ("TURNO", "602", 6, "16:30", "20:30"),
+    ("TURNO", "610", 7, "20:30", "00:30"), ("SUSS", "630", 1, "20:15", "00:15"),
+    ("DISP", "601", 1, "", ""), ("DISP", "607V", 2, "", ""), ("DISP", "Dd8", 3, "", ""),
+    ("DISP", "Dd2", 4, "", ""), ("DISP", "Dd5", 5, "", ""),
+    ("PARAM", "TurniCoperti", 8, "", ""),
+]
+
+
+def _ora(v):
+    """Orario come testo hh:mm da un valore Excel (time, datetime, frazione di giorno o testo)."""
+    if v is None or v == "":
+        return ""
+    if hasattr(v, "hour"):
+        return "%02d:%02d" % (v.hour, v.minute)
+    if isinstance(v, (int, float)):
+        m = int(round(float(v) % 1 * 1440))
+        return "%02d:%02d" % (m // 60 % 24, m % 60)
+    return str(v).strip()[:5]
+
+
+def _leggi_config_natale(wb):
+    """Righe di Config_Natale (foglio nascosto del VBA v18), se c'e'; intestazioni cercate per nome."""
+    if "Config_Natale" not in wb.sheetnames:
+        return None
+    ws = wb["Config_Natale"]
+    righe = list(ws.iter_rows(values_only=True))
+    for k, r in enumerate(righe):
+        nomi = [str(x).strip().lower() if x is not None else "" for x in r]
+        if "validodal" in nomi and "tipo" in nomi and "codice" in nomi:
+            col = {n: nomi.index(n) for n in ("validodal", "tipo", "codice", "ordine", "inizio", "fine") if n in nomi}
+            out = []
+            for r2 in righe[k + 1:]:
+                g = lambda n: r2[col[n]] if n in col and col[n] < len(r2) else None
+                v, tipo, cod = g("validodal"), (g("tipo") or ""), g("codice")
+                if not v or not tipo or cod in (None, ""):
+                    continue
+                vd = v.date().isoformat() if hasattr(v, "date") else str(v)[:10]
+                tipo = str(tipo).strip().upper()
+                ordv = g("ordine")
+                if tipo == "PARAM":   # il valore puo' stare in Ordine, Inizio o Fine
+                    for x in (g("ordine"), g("inizio"), g("fine")):
+                        if isinstance(x, (int, float)) or (isinstance(x, str) and x.strip().isdigit()):
+                            ordv = int(float(x)); break
+                    out.append((vd, tipo, str(cod).strip(), int(ordv or 0), "", ""))
+                else:
+                    out.append((vd, tipo, str(cod).strip(), int(float(ordv or 0)), _ora(g("inizio")), _ora(g("fine"))))
+            return out
+    return None
+
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS persone(pos INTEGER, nome TEXT, gruppo TEXT, inizio TEXT, fine TEXT, note TEXT);
 CREATE TABLE IF NOT EXISTS graduatoria(ordine INTEGER, nome TEXT);
@@ -19,6 +84,7 @@ CREATE TABLE IF NOT EXISTS note_celle(data TEXT, pos INTEGER, testo TEXT, PRIMAR
 CREATE TABLE IF NOT EXISTS note_settimana(anno INTEGER, settimana INTEGER, giorno TEXT, collega TEXT, nota TEXT);
 CREATE TABLE IF NOT EXISTS log_import(quando TEXT, file TEXT, anno INTEGER, data TEXT, pos INTEGER, nome TEXT, cosa TEXT, da TEXT, a TEXT);
 CREATE TABLE IF NOT EXISTS meta(chiave TEXT PRIMARY KEY, valore TEXT);
+CREATE TABLE IF NOT EXISTS cfg_natale(valido_dal TEXT, tipo TEXT, codice TEXT, ordine INTEGER, inizio TEXT, fine TEXT);
 """
 
 
@@ -29,9 +95,11 @@ def importa_da_xlsm(percorso_xlsm, percorso_db, fine_anno=None):
     con = sqlite3.connect(percorso_db)
     con.executescript(SCHEMA)
     for t in ("persone", "graduatoria", "cfg_turni", "cfg_disponibilita", "cfg_sussidiari",
-              "cfg_motivazioni", "calendario", "assegnazioni", "note_settimana", "note_celle"):
+              "cfg_motivazioni", "calendario", "assegnazioni", "note_settimana", "note_celle", "cfg_natale"):
         con.execute("DELETE FROM " + t)
     wb = a.wb
+    nat = _leggi_config_natale(wb) or [(NATALE_DAL,) + r for r in NATALE_BASE]
+    con.executemany("INSERT INTO cfg_natale VALUES(?,?,?,?,?,?)", nat)
     for r in wb["Persone"].iter_rows(min_row=5, max_row=100, max_col=6, values_only=True):
         if isinstance(r[0], (int, float)) and 1 <= r[0] <= 14:
             f = lambda v: v.date().isoformat() if hasattr(v, "date") else None
@@ -118,6 +186,20 @@ class ArchivioDB:
     def __init__(self, percorso_db):
         self.con = sqlite3.connect(percorso_db, check_same_thread=False)  # il server gira in un thread proprio (un solo thread alla volta)
         c = self.con
+        # archivi creati prima dei turni di Natale: tabella e valori di partenza
+        c.execute("CREATE TABLE IF NOT EXISTS cfg_natale(valido_dal TEXT, tipo TEXT, codice TEXT, ordine INTEGER, inizio TEXT, fine TEXT)")
+        if not c.execute("SELECT 1 FROM cfg_natale LIMIT 1").fetchone():
+            c.executemany("INSERT INTO cfg_natale VALUES(?,?,?,?,?,?)", [(NATALE_DAL,) + r for r in NATALE_BASE])
+            c.commit()
+        else:   # v0.29 -> v18b: valori di partenza col 630 sussidiario sostituiti (le versioni cambiate a mano restano)
+            for (v,) in c.execute("SELECT DISTINCT valido_dal FROM cfg_natale").fetchall():
+                righe = sorted(tuple(r) for r in c.execute(
+                    "SELECT tipo, codice, ordine, inizio, fine FROM cfg_natale WHERE valido_dal=?", (v,)))
+                if righe == sorted(_NATALE_BASE_V029):
+                    c.execute("DELETE FROM cfg_natale WHERE valido_dal=?", (v,))
+                    c.executemany("INSERT INTO cfg_natale VALUES(?,?,?,?,?,?)", [(v,) + r for r in NATALE_BASE])
+            c.commit()
+        self.natale = self._leggi_natale()
         self.versioni = self._leggi_versioni()
         self.config = self.config_alla(date.max)   # la piu' recente
         mot = {}
@@ -153,6 +235,25 @@ class ArchivioDB:
                 suss.setdefault(k, []).append((cod, ini, fin))
             out[v] = Config(turni, disp, suss, mot)
         return out
+
+    def _leggi_natale(self):
+        out = {}
+        for v, tipo, cod, ordine, ini, fin in self.con.execute(
+                "SELECT valido_dal, tipo, codice, ordine, inizio, fine FROM cfg_natale ORDER BY valido_dal, tipo, ordine"):
+            x = out.setdefault(v, {"TURNO": [], "SUSS": [], "DISP": [], "PARAM": {}})
+            if tipo == "PARAM":
+                x["PARAM"][cod] = ordine
+            elif tipo in x:
+                x[tipo].append((cod, ini or "", fin or ""))
+        return out
+
+    def natale_alla(self, d):
+        """Configurazione dei turni di Natale se d e' il 25/12 (versione piu' recente con valido_dal <= d,
+        se nessuna la piu' antica), altrimenti None."""
+        if (d.month, d.day) != (12, 25) or not self.natale:
+            return None
+        valide = [v for v in self.natale if v <= d.isoformat()]
+        return self.natale[max(valide) if valide else min(self.natale)]
 
     def config_alla(self, d):
         """Configurazione (orari e priorita') in vigore nel giorno d: l'ultima versione con valido_dal <= d."""
@@ -210,6 +311,7 @@ class ArchivioDB:
     def ricarica(self):
         """Rilegge dal database lo stato in memoria (dopo un annullamento)."""
         self.ricarica_persone()
+        self.natale = self._leggi_natale()
         self.assegnazioni = [Assegnazione(r[0], r[1], date.fromisoformat(r[2]), r[3], r[4])
                              for r in self.con.execute("SELECT * FROM assegnazioni")]
         self._cal = {(r[0], r[1]): Cella(r[2], r[3], r[4] or "")

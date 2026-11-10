@@ -4,6 +4,10 @@ from .modelli import *
 from .calendario import modalita as get_modalita, is_festivo, primo_feriale_dopo_festivo
 
 ASSENTI_COPERTURA = ("CONG_FEST", "ASS_MAL", "104", "CORSI", "SIND", "RU")
+MAX_TURNI_FESTIVI = 7                            # domenica e festivi: 6 principali + 630
+# chi esce per primo quando i presenti sono piu' di 7 (601 in fondo, confermato il 09/11/2026);
+# si salta l'ultimo della coda (a Natale il Dd5), che copre il turno piu' tardi
+ORDINE_ECCEDENTI = ("Dd5", "Dd2", "Dd8", "607V", "601")
 
 
 class Motore:
@@ -57,6 +61,9 @@ class Motore:
 
     # ---------- configurazione per modalita'
     def turni_principali(self, mod, d):
+        nat = self.a.natale_alla(d)
+        if nat:
+            return [c for c, _i, _f in nat["TURNO"]]
         if mod == "Feriale":
             if self.is_lunedi_caso_a(d):
                 return ["627", "603", "605", "601", "604", "608", "606", "602", "610"]
@@ -68,6 +75,9 @@ class Motore:
         return []
 
     def sussidiari_cfg(self, mod, d):
+        nat = self.a.natale_alla(d)
+        if nat:
+            return [c for c, _i, _f in nat["SUSS"]]
         if mod == "Feriale":
             if primo_feriale_dopo_festivo(d):
                 chiave = "Lun_CasoA" if self.is_lunedi_caso_a(d) else "Lun_CasoB"
@@ -78,17 +88,29 @@ class Motore:
         return [x[0] for x in self.a.config_alla(d).sussidiari.get(chiave, [])]
 
     def orario_suss(self, codice, mod, d):
-        for c, i, _f in self.a.config_alla(d).sussidiari.get(mod, []):
+        nat = self.a.natale_alla(d)
+        for c, i, _f in (nat["SUSS"] if nat else self.a.config_alla(d).sussidiari.get(mod, [])):
             if c == codice:
                 return i
         return ""
 
     def orario_turno(self, codice, mod, d):
+        nat = self.a.natale_alla(d)
+        if nat:
+            return next((i for c, i, _f in nat["TURNO"] if c == codice), "")
         t = self.a.config_alla(d).turni.get(codice)
         return t[mod][0] if t else ""
 
     def coda_disp(self, mod, d):
+        nat = self.a.natale_alla(d)
+        if nat:
+            return [c for c, _i, _f in nat["DISP"]]
         return list(self.a.config_alla(d).disponibilita.get(mod, []))
+
+    def max_turni_festivi(self, d):
+        """Domenica e festivi: 7 turni coperti; a Natale il parametro TurniCoperti (8)."""
+        nat = self.a.natale_alla(d)
+        return int(nat["PARAM"].get("TurniCoperti", MAX_TURNI_FESTIVI)) if nat else MAX_TURNI_FESTIVI
 
     # ---------- funzione principale
     def calcola_giorno(self, d):
@@ -108,15 +130,38 @@ class Motore:
         nsuss = max(0, presenti - len(g.turni))
         cfg = self.sussidiari_cfg(mod, d)
         nsuss = min(nsuss, len(cfg))
+        max_fest = self.max_turni_festivi(d)
+        if mod == "Domenica":       # domenica e festivi: al massimo 7 turni coperti (6 principali + 630), Natale 8
+            nsuss = min(nsuss, max(0, max_fest - len(g.turni)))
         g.sussidiari = [Riga(cfg[i]) for i in range(nsuss)]
         disp = self._raccogli_disponibilita(dati, mod, d)
+        eccedenti = []
+        if mod == "Domenica" and presenti > max_fest:
+            # gli eccedenti escono dalla copertura e vanno tra gli assenti con FU (festivo) o CU (domenica):
+            # si scelgono tra i disponibili presenti nell'ordine Dd5, Dd2, Dd8, 607V (09/11/2026, VBA v17)
+            resto = presenti - max_fest
+            ultimo = self.coda_disp(mod, d)[-1:]       # l'ultimo della coda non va mai tra gli eccedenti (v18b)
+            for cod in ORDINE_ECCEDENTI:
+                if resto == 0:
+                    break
+                if cod in ultimo:
+                    continue
+                for j, x in enumerate(disp):
+                    if x[1] == cod:
+                        eccedenti.append(disp.pop(j))
+                        resto -= 1
+                        break
         grad = self._costruisci_graduatoria(g, mod, d)
-        self._copri(g, grad, disp)
+        self._copri(g, grad, disp, self.coda_disp(mod, d))
         for s in g.sussidiari:
             if s.nome == "":
                 s.nome = "Scoperto"
                 s.scoperto = True
+        # sussidiari mostrati in ordine di orario di inizio (06/11/2026), come i turni principali
+        g.sussidiari.sort(key=lambda r: self.orario_suss(r.codice, mod, d) or "99:99")
         self._raccogli_assenti(g, dati, d)
+        for x in eccedenti:
+            g.assenti.append(Assente(x[2], "CU" if d.weekday() == 6 else "FU"))
         g.presenti = presenti
         return g
 
@@ -220,15 +265,18 @@ class Motore:
                     arr[j], arr[k] = arr[k], arr[j]
         return arr
 
-    def _copri(self, g, grad, disp):
+    def _copri(self, g, grad, disp, coda=()):
+        """L'ultimo della coda dei disponibili ("ultimo turno disp.": Dd5 nei feriali e il sabato, 606 la domenica e
+        i festivi) copre il turno da coprire che inizia piu' tardi, principale o sussidiario. Gli altri disponibili,
+        in ordine di priorita', coprono i turni rimasti in ordine di orario. (606: 26/10 e 09/11/2026; Dd5: 06/11/2026)"""
         usato_g, usato_d = set(), set()
-        # il 606 (disponibile della domenica e dei festivi) copre il turno principale scoperto piu' tardi
-        ultimo = max((k for k, x in enumerate(grad) if x[0] == "P"), default=None)
-        if ultimo is not None:
+        ultimo_cod = coda[-1] if coda else None
+        liberi = list(range(len(grad)))        # principali e sussidiari (dal 09/11/2026 anche per il 606)
+        if ultimo_cod and liberi:
             for j, d in enumerate(disp):
-                if d[1] == "606":
-                    self._assegna(g, grad[ultimo], d)
-                    usato_g.add(ultimo)
+                if d[1] == ultimo_cod:
+                    self._assegna(g, grad[liberi[-1]], d)   # graduatoria in ordine di orario: l'ultimo inizia piu' tardi
+                    usato_g.add(liberi[-1])
                     usato_d.add(j)
                     break
         j = 0

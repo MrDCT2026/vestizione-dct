@@ -116,3 +116,7 @@ aside.mv{width:330px;flex-shrink:0;padding:10px 12px;overflow-x:auto}
 
 .nota-riga{display:grid;grid-template-columns:64px 80px 1fr;gap:6px;padding:3px 0;border-top:1px solid #EAEEF3;font-size:12px}
 .nota-riga:first-child{border-top:0}.nota-riga .n{font-weight:600}
+
+.barra .destra{display:flex;align-items:center;gap:10px}
+.annulla-mod{padding:4px 10px;font-size:12px}
+[hidden]{display:none!important}

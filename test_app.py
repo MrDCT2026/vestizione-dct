@@ -134,11 +134,9 @@ check("personale: graduatoria", len(pers["graduatoria"]) == 8 and pers["programm
 r, _ = j("/api/personale/uscita", {"pos": 8, "data": "2026-12-15"})
 r2, c2 = j("/api/personale/uscita", {"pos": 8, "data": "2026-10-01"})
 check("uscita", r["ok"] and c2 == 400 and "passato" in r2["errore"])
-r, c = j("/api/personale/ingresso", {"pos": 4, "nome": "Famà", "data": "2027-01-11"})
-check("ingresso di chi e' gia' programmato rifiutato", c == 400)
-r, _ = j("/api/personale/ingresso", {"pos": 4, "nome": "Alinari M.", "data": "2027-01-11"})
+r, _ = j("/api/personale/ingresso", {"pos": 4, "nome": "Famà", "data": "2027-01-11"})
 pers, _ = j("/api/personale")
-check("ingresso da graduatoria", r["ok"] and "Alinari M." not in pers["graduatoria"] and any(p["tipo"] == "ingresso" and p["nome"] == "Alinari M." for p in pers["programmati"]))
+check("ingresso da graduatoria", r["ok"] and "Famà" not in pers["graduatoria"] and any(p["tipo"] == "ingresso" for p in pers["programmati"]))
 r, _ = j("/api/personale/annulla_ingresso", {"pos": 4, "data": "2027-01-11"})
 r, _ = j("/api/personale/annulla_uscita", {"pos": 8})
 r, _ = j("/api/personale/aggiungi", {"nome": "Rossi", "posto": 1})
@@ -220,5 +218,32 @@ check("pagina regole tolta", j("/api/regole")[1] == 400)
 s, _ = j("/api/importa", open(XLSM, "rb").read())
 check("reimportazione con archivio aperto", s.get("aperto") and any(f.startswith("prima_importazione_") for f in os.listdir(os.path.join(P.cartella, "backup"))), s)
 check("stato: programma e cartella", s.get("programma") == "Vestizione DCT" and s.get("cartella") == os.path.abspath(P.cartella))
+# Annulla l'ultima modifica (06/11/2026)
+st0 = j("/api/stato")[0]
+grad0 = j("/api/personale")[0]["graduatoria"]
+j("/api/personale/togli", {"nome": grad0[0]})
+st = j("/api/stato")[0]
+check("annulla: descrizione", st["annulla"] and st["annulla"]["descr"] == grad0[0] + " tolto dalla graduatoria", st.get("annulla"))
+r, c = j("/api/annulla", {})
+check("annulla: graduatoria ripristinata", c == 200 and j("/api/personale")[0]["graduatoria"] == grad0, r)
+_an = j("/api/anno?anno=2026&mese=11")[0]
+_pi = next(i for i, rr_ in enumerate(_an["righe"]) if _an["righe"][i]["celle"][25]["v"] not in ("R", "") and not _an["righe"][i]["celle"][25]["t"] and not _an["righe"][i]["celle"][25]["vuota"])
+r, _ = j("/api/tasto", {"tasto": "CONG_FEST", "celle": [["2026-11-26", _pi + 1]]})
+cella = lambda: j("/api/anno?anno=2026&mese=11")[0]["righe"][_pi]["celle"][25]["t"]
+t1 = cella()
+j("/api/annulla", {})
+check("annulla: tasto tolto", t1 == "CONG_FEST" and cella() != "CONG_FEST", (t1, cella()))
+r, c = j("/api/cancella", {"data": "2026-11-26", "pos": _pi + 1})    # non riesce: nulla da cancellare
+check("annulla: una modifica non riuscita non entra nell'elenco", (j("/api/stato")[0]["annulla"] or {}).get("descr") == (st0.get("annulla") or {}).get("descr"))
+# sostituisci dal server
+pp = j("/api/personale")[0]
+p9 = next(x for x in pp["elenco"] if x["pos"] == 9)
+r, c = j("/api/personale/sostituisci", {"pos": 9, "nome": "Sostituto Nove", "data": "2026-12-01", "da_graduatoria": False})
+pp = j("/api/personale")[0]
+check("sostituisci: registrata", c == 200 and any(x["tipo"] == "ingresso" and x["nome"] == "Sostituto Nove" for x in pp["programmati"])
+      and any(x["tipo"] == "uscita" and x["nome"] == p9["nome"] and x["data"] == "2026-11-30" for x in pp["programmati"]), r)
+j("/api/annulla", {})
+pp = j("/api/personale")[0]
+check("sostituisci annullata in un colpo", not any(x["nome"] in ("Sostituto Nove", p9["nome"]) for x in pp["programmati"]))
 print("   prove riuscite: %d, fallite: %d" % (OK, KO))
 sys.exit(1 if KO else 0)

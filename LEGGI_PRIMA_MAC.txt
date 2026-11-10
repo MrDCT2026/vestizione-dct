@@ -35,15 +35,58 @@ COSA FUNZIONA ORA
 Tutte le schermate dello schizzo sono presenti.
 
 
-NOVITA' v0.24 (versione Windows)
-- Nuovo app_windows.py: avvio per Windows (anche da scheda SD). I dati stanno in Dati_VestizioneDCT
-  accanto alla cartella del programma, senza lettere di unita' fisse. Una sola copia per volta:
-  un secondo doppio clic riapre quella gia' in funzione.
-- Cartella windows/ (avvio .bat, LEGGIMI della scheda, nota tecnica per l'informatica) e
-  .github/workflows/windows.yml: costruzione e prove su Windows con GitHub Actions.
-- Prove aggiornate ai dati di VESTIZIONE_DCT_15; confronto con la macro esteso alle settimane 44-47
-  (le intestazioni dei giorni ora si cercano nel foglio). test_windows.py: prove dell'avvio.
-- Il programma registra solo il nome del file importato, non tutto il percorso.
+PROVE (dal 09/11/2026): python3 prove.py VESTIZIONE_DCT_15.xlsm VESTIZIONE_DCT_19.xlsm
+  v15 = scenari delle prove di funzionamento; v19 = confronto con la macro (settimane 46-52 tutte UGUALI,
+  anche il file esportato cella per cella). Il confronto trova da solo le fasce dei giorni (altezza variabile).
+
+NOVITA' v0.31 (versione Windows, 10/11/2026)
+- Stesso programma della v0.30 piu' l'avvio per Windows (app_windows.py): app con finestra propria e versione
+  portatile (Python ufficiale + .bat, si apre in Edge), costruite e provate su Windows da GitHub Actions
+  (.github/workflows/windows.yml, cartella windows/). Sulla scheda SD i dati stanno in Dati_VestizioneDCT
+  accanto alle cartelle del programma; un secondo doppio clic riapre la copia gia' in funzione.
+- Il programma registra solo il nome del file importato, non tutto il percorso; /api/stato dice anche
+  programma e cartella dei dati. Prove: test_windows.py; test_app.py prova anche la reimportazione
+  con l'archivio aperto.
+
+NOVITA' v0.30 (Natale come VBA v18b)
+- A Natale il 630 e' un turno PRINCIPALE (20:15-00:15): 8 turni principali, nessun sussidiario.
+- L'ultimo della coda dei disponibili non va mai tra gli eccedenti (a Natale il Dd5, che copre il 610;
+  domenica/festivi il 606). Eccedenti di Natale: Dd2, Dd8, 607V, 601.
+- Gli archivi con i valori di Natale della v0.29 si correggono da soli all'apertura.
+
+NOVITA' v0.29 (turni di Natale, come VBA v18)
+- 25/12, qualunque giorno della settimana: turni propri. Principali 603 07:45-11:45, 605 08:30-12:30,
+  604 12:00-16:00, 608 12:30-16:30, 606 16:00-20:00, 602 16:30-20:30, 610 20:30-00:30; sussidiario 630 20:15-00:15.
+  8 turni coperti; disponibili 601, 607V, Dd8, Dd2, Dd5 (l'ultimo copre il turno piu' tardi); dal nono presente
+  eccedenti in FU (Dd5, Dd2, Dd8, 607V, 601). Il 26/12 e' un festivo normale.
+- Configurazione in una tabella con validita' "dal" (cfg_natale: valido_dal, tipo TURNO/SUSS/DISP/PARAM, codice,
+  ordine, inizio, fine). Se il file Excel ha il foglio Config_Natale, all'importazione si legge da li'.
+  In Anagrafica, in fondo: "Turni di Natale" per cambiare gli orari dal giorno scelto.
+
+NOVITA' v0.28 (allineata alla regola domenica/festivi del VBA v17, 09/11/2026)
+- Domenica e festivi: al massimo 7 turni coperti (6 principali + 630). Gli eccedenti (presenti - 7) vanno tra
+  gli assenti con FU (festivo) o CU (domenica), scelti tra i disponibili presenti nell'ordine Dd5, Dd2, Dd8,
+  607V e, in fondo, 601 (confermato: altrimenti il 601 restava senza turno e senza assenza).
+- Il 606 copre il turno da coprire piu' tardi, principale o sussidiario (come il Dd5 nei feriali e il sabato).
+- Il conteggio "DCT in servizio" della tabella MV non cambia.
+
+NOVITA' v0.27
+- Copertura: il Dd5 (feriali e sabato) copre il turno che inizia piu' tardi tra TUTTI quelli da coprire,
+  sussidiari compresi (es. 14/12/2026: Dd5 sul 630). Il 606 la domenica resta sui soli turni principali.
+- I sussidiari compaiono in ordine di orario di inizio, come i turni principali.
+
+NOVITA' v0.26
+- "Annulla modifica" (in alto a destra): riporta l'archivio a com'era prima dell'ultima modifica, qualunque sia
+  (tasti dell'Anno, note, RL, personale, graduatoria, anagrafica, importazioni). Si puo' ripetere fino a 30 passi
+  indietro, anche dopo aver chiuso e riaperto l'app. Il pulsante dice quale modifica toglie.
+- Personale: "Sostituisci..." su una posizione occupata: chi c'e' esce il giorno prima e il nuovo entra dalla
+  data scelta, in un colpo solo. "Cambia uscita..." accetta anche una data successiva, se nessuno subentra prima.
+
+NOVITA' v0.25
+- Copertura: l'ultimo della coda dei disponibili ("Ultimo turno disp.") copre il turno principale scoperto che
+  inizia piu' tardi: nei feriali e il sabato e' il Dd5, la domenica e i festivi il 606 (e li' il Dd5 resta nella
+  coda normale, in ordine di orario). Gli altri disponibili coprono i turni rimasti in ordine di orario.
+  Da portare anche nel VBA (modCopertura, CopriGraduatoria).
 
 NOVITA' v0.23
 - Tolta la pagina "Regole" (solo consultazione). Orari e priorita' si vedono e si cambiano in Anagrafica:

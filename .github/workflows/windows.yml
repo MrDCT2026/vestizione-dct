@@ -37,10 +37,13 @@ jobs:
             echo "::warning::Chiave PROVA_CHIAVE assente: salto le prove sul file VESTIZIONE_DCT_15."
             exit 0
           fi
-          openssl enc -d -aes-256-cbc -pbkdf2 -iter 200000 -in prove_dati/VESTIZIONE_DCT_15.xlsm.enc \
-            -out "$RUNNER_TEMP/rif.xlsm" -pass env:PROVA_CHIAVE
-          python prove.py "$RUNNER_TEMP/rif.xlsm"
-          rm -f "$RUNNER_TEMP/rif.xlsm"
+          # v15: scenari delle prove; v19: confronto con la macro (VBA v19)
+          for n in 15 19; do
+            openssl enc -d -aes-256-cbc -pbkdf2 -iter 200000 -in prove_dati/VESTIZIONE_DCT_$n.xlsm.enc \
+              -out "$RUNNER_TEMP/rif$n.xlsm" -pass env:PROVA_CHIAVE
+          done
+          python prove.py "$RUNNER_TEMP/rif15.xlsm" "$RUNNER_TEMP/rif19.xlsm"
+          rm -f "$RUNNER_TEMP"/rif*.xlsm
 
       - name: Prove dell'avvio Windows (codice sorgente)
         run: python test_windows.py

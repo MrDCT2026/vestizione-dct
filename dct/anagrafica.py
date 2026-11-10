@@ -166,3 +166,43 @@ def imposta_sussidiari(arch, chiave, righe, dal, oggi):
             raise ErroreAnagrafica("L'elenco deve contenere esattamente gli stessi codici: %s." % ", ".join(x[0] for x in lista))
         cfg.sussidiari[chiave] = righe
     _modifica(arch, dal, oggi, fn)
+
+
+# ------------------------------------------------------------------ turni di Natale (25/12)
+def natale_leggi(arch, d):
+    """Configurazione di Natale in vigore dal giorno d (versione piu' recente con valido_dal <= d)."""
+    if not arch.natale:
+        return None
+    valide = [v for v in arch.natale if v <= d.isoformat()]
+    v = max(valide) if valide else min(arch.natale)
+    x = arch.natale[v]
+    return {"valida_dal": v, "turni": x["TURNO"], "sussidiari": x["SUSS"], "disponibili": [c for c, _i, _f in x["DISP"]],
+            "turni_coperti": x["PARAM"].get("TurniCoperti", 8),
+            "programmate": sorted(w for w in arch.natale if w > v)}
+
+
+def imposta_orari_natale(arch, orari, dal, oggi):
+    """Nuovi orari dei turni di Natale (codice -> (inizio, fine)) validi dal giorno dal: nuova versione."""
+    if dal < oggi:
+        raise ErroreAnagrafica("Il passato non si tocca: la modifica può valere dal %s in poi." % oggi.strftime("%d/%m/%Y"))
+    # conta solo il 25/12: la modifica vale dal primo Natale da dal in poi (e sostituisce la versione di quel Natale)
+    dal = date(dal.year, 12, 25) if dal <= date(dal.year, 12, 25) else date(dal.year + 1, 12, 25)
+    successive = [v for v in arch.natale if v > dal.isoformat()]
+    if successive:
+        raise ErroreAnagrafica("Esiste già una modifica dei turni di Natale dal %s."
+                               % date.fromisoformat(successive[0]).strftime("%d/%m/%Y"))
+    base = natale_leggi(arch, dal)
+    v = dal.isoformat()
+    righe = []
+    for tipo, lista in (("TURNO", base["turni"]), ("SUSS", base["sussidiari"])):
+        for k, (c, i, f) in enumerate(lista, 1):
+            i2, f2 = orari.get(c, (i, f))
+            righe.append((v, tipo, c, k, _ora(i2), _ora(f2)))
+    for k, c in enumerate(base["disponibili"], 1):
+        righe.append((v, "DISP", c, k, "", ""))
+    righe.append((v, "PARAM", "TurniCoperti", int(base["turni_coperti"]), "", ""))
+    arch.con.execute("DELETE FROM cfg_natale WHERE valido_dal=?", (v,))
+    arch.con.executemany("INSERT INTO cfg_natale VALUES(?,?,?,?,?,?)", righe)
+    arch.con.commit()
+    arch.natale = arch._leggi_natale()
+    return dal

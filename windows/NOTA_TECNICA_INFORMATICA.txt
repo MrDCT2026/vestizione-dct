@@ -1,4 +1,4 @@
-﻿VESTIZIONE DCT - NOTA TECNICA PER L'INFORMATICA                v0.24 - 2026 Bruno Roli
+﻿VESTIZIONE DCT - NOTA TECNICA PER L'INFORMATICA                v0.31 - 2026 Bruno Roli
 =====================================================================================
 
 SCOPO

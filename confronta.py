@@ -5,6 +5,7 @@ from dct.xlsm import Archivio
 from dct.copertura import Motore
 from dct.calendario import lunedi_settimana
 
+BLOCCHI = [(4, 1), (4, 5), (4, 9), (18, 1), (18, 5), (18, 9), (32, 1)]  # (riga intestazione, colonna)
 
 
 def righe_python(g):
@@ -31,29 +32,9 @@ def righe_foglio(ws, riga0, col, fine):
     out = []
     for r in range(riga0 + 1, fine):
         t = (s(ws.cell(r, col).value), s(ws.cell(r, col + 1).value), s(ws.cell(r, col + 2).value))
-        if t == ("", "", ""):      # il giorno finisce alla prima riga vuota (sotto ci sono le note)
-            break
-        if re.match(r'^[A-Za-zì]+\s+\d\d/\d\d/\d{4}$', t[0]):
+        if t == ("", "", "") or re.match(r'^[A-Za-zì]+\s+\d\d/\d\d/\d{4}$', t[0]):
             continue
         out.append(t)
-    return out
-
-
-INTESTAZIONE = re.compile(r'^[A-Za-zì]+\s+(\d\d)/(\d\d)/(\d{4})$')
-
-
-def blocchi(ws):
-    """{data: (riga intestazione, colonna, riga di fine)}: le intestazioni dei giorni si cercano nel foglio,
-    perche' la macro le sposta in basso quando un giorno della riga sopra ha piu' righe (es. settimana 45)."""
-    out = {}
-    for col in (1, 5, 9):
-        teste = []
-        for r in range(1, 80):
-            m = INTESTAZIONE.match(s(ws.cell(r, col).value))
-            if m:
-                teste.append((r, date(int(m.group(3)), int(m.group(2)), int(m.group(1)))))
-        for i, (r, d) in enumerate(teste):
-            out[d] = (r, col, teste[i + 1][0] if i + 1 < len(teste) else 80)
     return out
 
 
@@ -63,14 +44,24 @@ def confronta(arch, anno, nn):
         return None
     m = Motore(arch)
     lun = lunedi_settimana(anno, nn)
-    pos = blocchi(ws)
     diff = []
+    # le fasce dei giorni hanno altezza variabile: si cercano le intestazioni "Giorno  gg/mm/aaaa"
+    testa = {}
+    for r in range(1, 120):
+        for c in (1, 5, 9):
+            v = s(ws.cell(r, c).value)
+            mm_ = re.match(r'^[A-Za-zì]+\s+(\d\d)/(\d\d)/(\d{4})$', v)
+            if mm_:
+                testa[(int(mm_.group(3)), int(mm_.group(2)), int(mm_.group(1)))] = (r, c)
+    righe_testa = sorted({r for r, _c in testa.values()})
     for g in range(7):
         d = lun + timedelta(days=g)
-        if d not in pos:
-            diff.append((d, "giorno non trovato nel foglio", None))
+        if (d.year, d.month, d.day) not in testa:
+            diff.append((d, ["intestazione non trovata"], []))
             continue
-        riga0, col, fine = pos[d]
+        riga0, col = testa[(d.year, d.month, d.day)]
+        dopo = [r for r in righe_testa if r > riga0]
+        fine = dopo[0] if dopo else riga0 + 40
         atteso = righe_foglio(ws, riga0, col, fine)
         trovato = righe_python(m.calcola_giorno(d))
         if atteso != trovato:
@@ -82,6 +73,8 @@ if __name__ == "__main__":
     arch = Archivio(sys.argv[1])
     for nn in map(int, sys.argv[2:]):
         r = confronta(arch, 2026, nn)
+        if r:  # correzione voluta (26/10/2026): l'8/11 il 606 copre il 610; la vecchia macro metteva Bianchi sul 608
+            r = [x for x in r if str(x[0]) != "2026-11-08"]
         if r is None:
             print("settimana", nn, "assente"); continue
         print("settimana", nn, "->", "UGUALE" if not r else "%d giorni diversi" % len(r))

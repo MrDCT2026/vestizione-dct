@@ -75,7 +75,7 @@ try:
         check("usa la cartella indicata", os.path.normcase(s.get("cartella", "")) == os.path.normcase(os.path.abspath(dati)), s.get("cartella"))
         check("senza archivio all'inizio", s.get("aperto") is False)
         c, html = leggi(url + "/")
-        check("pagina principale", c == 200 and b"Vestizione" in html and b"v0.24" in html)
+        check("pagina principale", c == 200 and b"Vestizione" in html and b"v0." in html)
         c, js = leggi(url + "/app.js") if b'src="app.js"' in html else leggi(url + "/static/app.js")
         check("script della pagina", c == 200 and len(js) > 1000)
         check("cartella backup creata", os.path.isdir(os.path.join(dati, "backup")))
